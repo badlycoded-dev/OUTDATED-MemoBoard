@@ -1,0 +1,13 @@
+{
+  "name": "Backend",
+  "version": "0.1.0",
+  "description": "Server side",
+  "main": "server.js",
+  "scripts": {
+    "dev":"nodemon server.js",
+    "start":"node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
