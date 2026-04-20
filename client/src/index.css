@@ -1,0 +1,360 @@
+/* Trello-inspired palette */
+:root {
+  --trello-blue:    #0079bf;
+  --trello-bg:      #0067a3;
+  --trello-col:     #ebecf0;
+  --trello-col-hdr: #172b4d;
+  --trello-text:    #172b4d;
+  --trello-muted:   #5e6c84;
+  --trello-card:    #ffffff;
+  --trello-hover:   #f4f5f7;
+  --tag-design-bg:  #e3fcef; --tag-design-color: #006644;
+  --tag-dev-bg:     #deebff; --tag-dev-color:    #0747a6;
+  --tag-research-bg:#fff0b3; --tag-research-color:#172b4d;
+  --tag-urgent-bg:  #ffebe6; --tag-urgent-color: #bf2600;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: var(--trello-text);
+}
+
+/* ── BOARD WRAPPER ── */
+.board-wrap {
+  min-height: 100vh;
+  background: var(--trello-bg);
+  background-image: linear-gradient(rgba(0,0,0,.15) 0%, rgba(0,0,0,0) 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+.board-header {
+  background: rgba(0,0,0,.2);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.board-title-input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  min-width: 10ch;
+}
+.board-title-input:hover, .board-title-input:focus {
+  background: rgba(255,255,255,.2);
+  cursor: text;
+}
+
+.header-btn {
+  background: rgba(255,255,255,.2);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background .15s;
+}
+.header-btn:hover { background: rgba(255,255,255,.3); }
+
+/* ── COLUMNS AREA ── */
+.columns-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 8px 12px 12px;
+  gap: 8px;
+}
+
+/* ── COLUMN ── */
+.trello-column {
+  background: var(--trello-col);
+  border-radius: 10px;
+  width: 272px;
+  flex-shrink: 0;
+  max-height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+}
+
+.col-header {
+  padding: 10px 8px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.col-title-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--trello-col-hdr);
+  outline: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.col-title-input:focus {
+  background: #fff;
+  cursor: text;
+  box-shadow: 0 0 0 2px var(--trello-blue);
+}
+
+.col-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--trello-muted);
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background .15s;
+}
+.col-menu-btn:hover { background: rgba(9,30,66,.08); color: var(--trello-col-hdr); }
+
+/* ── CARDS LIST ── */
+.cards-list {
+  padding: 0 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 4px;
+}
+
+/* ── CARD ── */
+.trello-card {
+  background: var(--trello-card);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 0 rgba(9,30,66,.25);
+  cursor: pointer;
+  transition: background .1s, box-shadow .1s, transform .1s;
+  position: relative;
+}
+.trello-card:hover {
+  background: var(--trello-hover);
+  box-shadow: 0 4px 8px rgba(9,30,66,.15);
+}
+.trello-card:active { transform: scale(0.99); }
+
+/* Card color stripe (priority) */
+.card-stripe {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: 6px 0 0 6px;
+}
+
+.card-title {
+  font-size: 14px;
+  color: var(--trello-text);
+  margin-bottom: 6px;
+  line-height: 1.4;
+  padding-left: 8px;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.card-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: .3px;
+}
+.tag-design   { background: var(--tag-design-bg);   color: var(--tag-design-color); }
+.tag-dev      { background: var(--tag-dev-bg);      color: var(--tag-dev-color); }
+.tag-research { background: var(--tag-research-bg); color: var(--tag-research-color); }
+.tag-urgent   { background: var(--tag-urgent-bg);   color: var(--tag-urgent-color); }
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.card-meta-pill {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--trello-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: transparent;
+}
+.card-meta-pill.overdue { background: #bf2600; color: #fff; border-radius: 3px; }
+.card-meta-pill.soon    { background: #f5a623; color: #fff; border-radius: 3px; }
+
+.card-checklist-bar {
+  height: 6px;
+  background: #dfe1e6;
+  border-radius: 3px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 60px;
+}
+.checklist-fill {
+  height: 100%;
+  background: var(--trello-blue);
+  border-radius: 3px;
+  transition: width .3s;
+}
+.checklist-fill.complete { background: #70b500; }
+
+.card-avatars { display: flex; margin-left: auto; }
+.card-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-left: -6px;
+  border: 2px solid #fff;
+}
+.card-avatar:first-child { margin-left: 0; }
+
+/* ── ADD CARD ── */
+.add-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--trello-muted);
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  margin: 2px 0 8px;
+  transition: background .15s, color .15s;
+}
+.add-card-btn:hover { background: rgba(9,30,66,.08); color: var(--trello-col-hdr); }
+
+.add-card-form { padding: 0 6px 8px; }
+.add-card-textarea {
+  width: 100%;
+  background: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--trello-text);
+  resize: none;
+  box-shadow: 0 1px 0 rgba(9,30,66,.25);
+  outline: none;
+  font-family: inherit;
+}
+.add-card-textarea:focus { box-shadow: 0 0 0 2px var(--trello-blue); }
+
+/* ── ADD COLUMN BUTTON ── */
+.add-column-btn {
+  background: rgba(255,255,255,.2);
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 272px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  transition: background .15s;
+}
+.add-column-btn:hover { background: rgba(255,255,255,.3); }
+
+/* ── MODAL ── */
+.modal-content { border-radius: 10px; border: none; }
+.modal-header  { background: #f4f5f7; border-radius: 10px 10px 0 0; border-bottom: 1px solid #dfe1e6; }
+.modal-title   { font-size: 16px; font-weight: 700; color: var(--trello-col-hdr); }
+
+.modal-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--trello-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+
+.form-control, .form-select {
+  font-size: 14px;
+  border-color: #dfe1e6;
+  border-radius: 4px;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--trello-blue);
+  box-shadow: 0 0 0 2px rgba(0,121,191,.25);
+}
+
+.checklist-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.checklist-item-row input[type=checkbox] {
+  width: 16px; height: 16px;
+  accent-color: var(--trello-blue);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.checklist-item-row span { font-size: 14px; color: var(--trello-text); }
+.checklist-item-row span.done-text { text-decoration: line-through; color: var(--trello-muted); }
+
+/* Priority stripe colors */
+.priority-high { background: #bf2600; }
+.priority-med  { background: #f5a623; }
+.priority-low  { background: #70b500; }
+
+/* Drag ghost */
+[data-rbd-draggable-id] { user-select: none; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(9,30,66,.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(9,30,66,.35); }
