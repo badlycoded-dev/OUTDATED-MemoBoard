@@ -1,21 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Button, Form, Badge, Row, Col } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Row, Col, Form } from 'react-bootstrap';
 
-const TAGS_OPTIONS = ['design','dev','research','urgent'];
-const PRIORITY_OPTIONS = ['low','med','high'];
-const PRIORITY_COLORS  = { high:'#bf2600', med:'#f5a623', low:'#70b500' };
+const PRIORITY_OPTS   = ['low', 'med', 'high'];
+const PRIORITY_COLORS = { high: '#eb5a46', med: '#f5a623', low: '#70b500' };
+const COVER_COLORS    = ['', '#eb5a46','#f5a623','#70b500','#0079bf','#c377e0','#00c2e0','#ff78cb','#344563','#172b4d'];
+const POINTS_OPTS     = [0, 1, 2, 3, 5, 8, 13, 21];
 
-export default function CardModal({ card, colId, colOptions, onClose, onSave, onDelete, onMove }) {
-  const [form, setForm] = useState({
-    title:       '',
-    description: '',
-    tags:        [],
-    priority:    'med',
-    due:         '',
-    assignees:   '',
-    checklist:   [],
-  });
-  const [newItem, setNewItem] = useState('');
+function fmtTimer(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function timeAgo(date) {
+  const diff = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+export default function CardModal({
+  card, colId, colOptions, boardLabels,
+  onClose, onSave, onDelete, onMove, onDuplicate,
+  onTimerAction, onAddComment, onDeleteComment,
+}) {
+  const [form, setForm] = useState(null);
+  const [newItem, setNewItem]       = useState('');
+  const [newComment, setNewComment] = useState('');
+  const [author, setAuthor]         = useState(localStorage.getItem('mb_author') || 'Anonymous');
+  const [activeTab, setActiveTab]   = useState('details'); // details | activity
+  const [elapsed, setElapsed]       = useState(0);
+  const [saving, setSaving]         = useState(false);
+  const titleRef = useRef();
+
+  // Live timer
+  useEffect(() => {
+    if (!card?.timerStart) { setElapsed(0); return; }
+    const tick = () => setElapsed(Math.floor((Date.now() - new Date(card.timerStart)) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [card?.timerStart]);
 
   useEffect(() => {
     if (!card) return;
@@ -24,18 +49,26 @@ export default function CardModal({ card, colId, colOptions, onClose, onSave, on
       description: card.description || '',
       tags:        card.tags        || [],
       priority:    card.priority    || 'med',
-      due:         card.due ? card.due.slice(0,10) : '',
+      due:         card.due ? card.due.slice(0, 10) : '',
       assignees:   (card.assignees || []).join(', '),
       checklist:   (card.checklist || []).map(i => ({ ...i })),
+      cover:       card.cover       || '',
+      points:      card.points      || 0,
+      completed:   card.completed   || false,
     });
+    setTimeout(() => titleRef.current?.focus(), 100);
   }, [card]);
 
-  if (!card) return null;
+  if (!card || !form) return null;
 
-  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const toggleTag = (t) =>
-    set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
+  const toggleLabel = (color) => {
+    const tags = form.tags.includes(color)
+      ? form.tags.filter(t => t !== color)
+      : [...form.tags, color];
+    set('tags', tags);
+  };
 
   const addItem = () => {
     if (!newItem.trim()) return;
@@ -43,187 +76,283 @@ export default function CardModal({ card, colId, colOptions, onClose, onSave, on
     setNewItem('');
   };
 
-  const toggleItem = (i) =>
-    set('checklist', form.checklist.map((it, idx) => idx === i ? { ...it, done: !it.done } : it));
-
-  const removeItem = (i) =>
-    set('checklist', form.checklist.filter((_, idx) => idx !== i));
-
-  const handleSave = () => {
-    onSave(colId, card._id, {
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(colId, card._id, {
       ...form,
       assignees: form.assignees.split(',').map(s => s.trim()).filter(Boolean),
-      due:       form.due || undefined,
+      due: form.due || undefined,
     });
+    setSaving(false);
+    onClose();
   };
 
-  const checkedCount = form.checklist.filter(i => i.done).length;
-  const totalCount   = form.checklist.length;
+  const handleComment = async () => {
+    if (!newComment.trim()) return;
+    localStorage.setItem('mb_author', author);
+    await onAddComment(colId, card._id, newComment.trim(), author);
+    setNewComment('');
+  };
+
+  const checked   = form.checklist.filter(i => i.done).length;
+  const total     = form.checklist.length;
+  const pct       = total ? Math.round((checked / total) * 100) : 0;
+  const totalSec  = (card.timerTotal || 0) + elapsed;
+  const colLabel  = colOptions.find(c => c.value === colId)?.label || '';
 
   return (
-    <Modal show onHide={onClose} size="lg" centered>
-      <Modal.Header closeButton>
-        <div style={{ width: '100%' }}>
-          <Form.Control
+    <Modal show onHide={onClose} size="xl" centered dialogClassName="mb-modal">
+      {/* Cover bar */}
+      {form.cover && <div className="mb-modal-cover" style={{ background: form.cover }} />}
+
+      <Modal.Header closeButton className="mb-modal-header">
+        <div className="w-100">
+          <input
+            ref={titleRef}
+            className="mb-modal-title"
             value={form.title}
             onChange={e => set('title', e.target.value)}
-            placeholder="Card title"
-            style={{ fontWeight: 700, fontSize: 16, border:'none', padding:'0 4px', boxShadow:'none' }}
+            onKeyDown={e => e.key === 'Enter' && e.target.blur()}
           />
-          <small className="text-muted" style={{ paddingLeft: 4 }}>
-            in column <strong>{colOptions.find(c => c.value === colId)?.label}</strong>
-          </small>
+          <div className="mb-modal-subtitle">
+            <i className="bi bi-kanban me-1" />
+            {colLabel}
+            {card.completed && <span className="ms-2 mb-badge mb-badge--green">✓ Done</span>}
+          </div>
         </div>
       </Modal.Header>
 
-      <Modal.Body>
+      <Modal.Body className="mb-modal-body">
         <Row>
-          {/* Left column */}
+          {/* ── Left: main content ── */}
           <Col md={8}>
 
-            {/* Description */}
-            <div className="modal-section-label">Description</div>
-            <Form.Control
-              as="textarea"
-              rows={3}
-              value={form.description}
-              onChange={e => set('description', e.target.value)}
-              placeholder="Add a more detailed description…"
-              className="mb-3"
-            />
-
-            {/* Checklist */}
-            <div className="modal-section-label">
-              Checklist
-              {totalCount > 0 && (
-                <span className="ms-2 text-secondary" style={{ fontWeight: 400, fontSize: 12 }}>
-                  {checkedCount}/{totalCount}
-                </span>
-              )}
-            </div>
-            {totalCount > 0 && (
-              <div className="mb-2">
-                <div className="card-checklist-bar" style={{ height: 8, marginBottom: 8 }}>
-                  <div
-                    className={`checklist-fill${checkedCount === totalCount ? ' complete' : ''}`}
-                    style={{ width: `${(checkedCount/totalCount)*100}%` }}
-                  />
-                </div>
-                {form.checklist.map((item, i) => (
-                  <div key={i} className="checklist-item-row">
-                    <input type="checkbox" checked={item.done} onChange={() => toggleItem(i)} />
-                    <span className={item.done ? 'done-text' : ''}>{item.text}</span>
-                    <button
-                      onClick={() => removeItem(i)}
-                      style={{ marginLeft:'auto', background:'none', border:'none', color:'#5e6c84', cursor:'pointer', padding:'0 4px' }}
-                    >✕</button>
-                  </div>
-                ))}
+            {/* Labels */}
+            {form.tags.length > 0 && (
+              <div className="d-flex flex-wrap gap-1 mb-3">
+                {form.tags.map((color, i) => {
+                  const lbl = boardLabels?.find(l => l.color === color);
+                  return (
+                    <span key={i} className="mb-label-pill" style={{ background: color }}>
+                      {lbl?.name || color}
+                    </span>
+                  );
+                })}
               </div>
             )}
-            <div className="d-flex gap-2 mb-3">
-              <Form.Control
-                value={newItem}
-                onChange={e => setNewItem(e.target.value)}
-                placeholder="Add an item…"
-                onKeyDown={e => e.key === 'Enter' && addItem()}
-                size="sm"
-              />
-              <Button variant="outline-secondary" size="sm" onClick={addItem}>Add</Button>
+
+            {/* Tabs */}
+            <div className="mb-tabs">
+              <button className={`mb-tab${activeTab === 'details' ? ' active' : ''}`} onClick={() => setActiveTab('details')}>
+                <i className="bi bi-card-text me-1" />Details
+              </button>
+              <button className={`mb-tab${activeTab === 'activity' ? ' active' : ''}`} onClick={() => setActiveTab('activity')}>
+                <i className="bi bi-activity me-1" />Activity
+                {card.activity?.length > 0 && <span className="ms-1 mb-tab-count">{card.activity.length}</span>}
+              </button>
             </div>
 
+            {activeTab === 'details' && (
+              <>
+                {/* Description */}
+                <div className="mb-section-label"><i className="bi bi-text-paragraph me-1" />Description</div>
+                <Form.Control as="textarea" rows={4} value={form.description}
+                  onChange={e => set('description', e.target.value)}
+                  placeholder="Add a more detailed description…"
+                  className="mb-textarea mb-3" />
+
+                {/* Checklist */}
+                <div className="mb-section-label d-flex align-items-center gap-2">
+                  <span><i className="bi bi-check2-all me-1" />Checklist</span>
+                  {total > 0 && <span className="text-muted" style={{ fontSize: 12, fontWeight: 400 }}>{pct}%</span>}
+                </div>
+                {total > 0 && (
+                  <div className="mb-3">
+                    <div className="mb-progress mb-3" style={{ height: 8 }}>
+                      <div className="mb-progress-fill" style={{ width: `${pct}%`, background: pct === 100 ? '#70b500' : '#0079bf', transition: 'width .3s' }} />
+                    </div>
+                    {form.checklist.map((item, i) => (
+                      <div key={i} className="mb-checklist-row">
+                        <input type="checkbox" checked={item.done}
+                          onChange={() => set('checklist', form.checklist.map((it, idx) => idx === i ? { ...it, done: !it.done } : it))} />
+                        <span className={item.done ? 'mb-strike' : ''}>{item.text}</span>
+                        <button className="mb-remove-btn ms-auto"
+                          onClick={() => set('checklist', form.checklist.filter((_, idx) => idx !== i))}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="d-flex gap-2 mb-4">
+                  <input className="form-control form-control-sm" value={newItem} placeholder="Add checklist item…"
+                    onChange={e => setNewItem(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addItem()} />
+                  <button className="mb-btn-primary btn-sm" onClick={addItem}>Add</button>
+                </div>
+
+                {/* Comments */}
+                <div className="mb-section-label"><i className="bi bi-chat-left me-1" />Comments</div>
+                <div className="mb-3">
+                  <div className="d-flex gap-2 mb-2">
+                    <input className="form-control form-control-sm" value={author} placeholder="Your name"
+                      onChange={e => setAuthor(e.target.value)} style={{ maxWidth: 130 }} />
+                    <input className="form-control form-control-sm" value={newComment} placeholder="Write a comment…"
+                      onChange={e => setNewComment(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleComment()} />
+                    <button className="mb-btn-primary btn-sm" onClick={handleComment}>Post</button>
+                  </div>
+                  {(card.comments || []).slice().reverse().map(cmt => (
+                    <div key={cmt._id} className="mb-comment">
+                      <div className="mb-comment-header">
+                        <strong>{cmt.author}</strong>
+                        <span className="text-muted ms-2" style={{ fontSize: 11 }}>{timeAgo(cmt.createdAt)}</span>
+                        <button className="mb-remove-btn ms-auto"
+                          onClick={() => onDeleteComment(colId, card._id, cmt._id)}>✕</button>
+                      </div>
+                      <div className="mb-comment-text">{cmt.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {activeTab === 'activity' && (
+              <div className="mb-activity-list">
+                {(card.activity || []).map((a, i) => (
+                  <div key={i} className="mb-activity-row">
+                    <i className="bi bi-clock-history me-2 text-muted" />
+                    <span>{a.text}</span>
+                    <span className="text-muted ms-auto" style={{ fontSize: 11 }}>{timeAgo(a.createdAt)}</span>
+                  </div>
+                ))}
+                {!card.activity?.length && <div className="text-muted" style={{ fontSize: 13 }}>No activity yet.</div>}
+              </div>
+            )}
           </Col>
 
-          {/* Right column – metadata */}
+          {/* ── Right: sidebar ── */}
           <Col md={4}>
+            <div className="mb-sidebar">
 
-            {/* Priority */}
-            <div className="modal-section-label">Priority</div>
-            <div className="d-flex gap-1 mb-3">
-              {PRIORITY_OPTIONS.map(p => (
-                <Button
-                  key={p}
-                  size="sm"
-                  variant={form.priority === p ? 'dark' : 'outline-secondary'}
-                  style={form.priority === p ? { background: PRIORITY_COLORS[p], borderColor: PRIORITY_COLORS[p] } : {}}
-                  onClick={() => set('priority', p)}
-                >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </Button>
-              ))}
+              {/* Mark complete */}
+              <button
+                className={`mb-sidebar-btn w-100 mb-2${form.completed ? ' active-green' : ''}`}
+                onClick={() => set('completed', !form.completed)}
+              >
+                <i className={`bi ${form.completed ? 'bi-check-circle-fill' : 'bi-check-circle'} me-2`} />
+                {form.completed ? 'Completed' : 'Mark complete'}
+              </button>
+
+              {/* Priority */}
+              <div className="mb-sidebar-label">Priority</div>
+              <div className="d-flex gap-1 mb-3">
+                {PRIORITY_OPTS.map(p => (
+                  <button key={p} onClick={() => set('priority', p)}
+                    className={`mb-priority-btn${form.priority === p ? ' active' : ''}`}
+                    style={form.priority === p ? { background: PRIORITY_COLORS[p], color: '#fff', borderColor: PRIORITY_COLORS[p] } : {}}>
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Labels */}
+              <div className="mb-sidebar-label">Labels</div>
+              <div className="d-flex flex-wrap gap-1 mb-3">
+                {(boardLabels || []).map(lbl => (
+                  <button key={lbl._id} onClick={() => toggleLabel(lbl.color)}
+                    className="mb-label-toggle"
+                    style={{
+                      background: lbl.color,
+                      opacity: form.tags.includes(lbl.color) ? 1 : 0.3,
+                      outline: form.tags.includes(lbl.color) ? '2px solid #172b4d' : 'none',
+                    }}
+                    title={lbl.name}>
+                    {lbl.name || lbl.color}
+                  </button>
+                ))}
+              </div>
+
+              {/* Story Points */}
+              <div className="mb-sidebar-label">Story Points</div>
+              <div className="d-flex flex-wrap gap-1 mb-3">
+                {POINTS_OPTS.map(p => (
+                  <button key={p} onClick={() => set('points', p)}
+                    className={`mb-points-btn${form.points === p ? ' active' : ''}`}>
+                    {p === 0 ? '—' : p}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cover */}
+              <div className="mb-sidebar-label">Cover</div>
+              <div className="d-flex flex-wrap gap-1 mb-3">
+                {COVER_COLORS.map(c => (
+                  <div key={c} onClick={() => set('cover', c)}
+                    className="mb-cover-swatch"
+                    style={{
+                      background: c || '#dfe1e6',
+                      outline: form.cover === c ? '2px solid #172b4d' : 'none',
+                    }}
+                    title={c || 'None'} />
+                ))}
+              </div>
+
+              {/* Due Date */}
+              <div className="mb-sidebar-label">Due Date</div>
+              <Form.Control type="date" value={form.due} size="sm" className="mb-3"
+                onChange={e => set('due', e.target.value)} />
+
+              {/* Members */}
+              <div className="mb-sidebar-label">Members</div>
+              <input className="form-control form-control-sm mb-1" value={form.assignees}
+                onChange={e => set('assignees', e.target.value)} placeholder="Alice, Bob, Carol" />
+              <div className="text-muted mb-3" style={{ fontSize: 11 }}>Comma-separated names</div>
+
+              {/* Time tracker */}
+              <div className="mb-sidebar-label">Time Tracker</div>
+              <div className="mb-timer-box mb-3">
+                <div className="mb-timer-display">
+                  {fmtTimer(totalSec)}
+                  {card.timerStart && <span className="mb-timer-live">● live</span>}
+                </div>
+                <div className="d-flex gap-1">
+                  {card.timerStart ? (
+                    <button className="mb-btn-danger btn-sm flex-1" onClick={() => onTimerAction(colId, card._id, 'stop')}>
+                      <i className="bi bi-stop-fill me-1" />Stop
+                    </button>
+                  ) : (
+                    <button className="mb-btn-primary btn-sm flex-1" onClick={() => onTimerAction(colId, card._id, 'start')}>
+                      <i className="bi bi-play-fill me-1" />Start
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Move to */}
+              <div className="mb-sidebar-label">Move to column</div>
+              <Form.Select size="sm" value={colId} className="mb-3"
+                onChange={e => onMove(card._id, colId, e.target.value)}>
+                {colOptions.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </Form.Select>
+
+              {/* Actions */}
+              <div className="mb-sidebar-label">Actions</div>
+              <button className="mb-sidebar-btn w-100 mb-2" onClick={() => { onDuplicate(colId, card._id); onClose(); }}>
+                <i className="bi bi-copy me-2" />Duplicate card
+              </button>
+              <button className="mb-sidebar-btn mb-sidebar-btn--danger w-100"
+                onClick={() => { if (window.confirm('Delete this card?')) { onDelete(colId, card._id); onClose(); } }}>
+                <i className="bi bi-trash me-2" />Delete card
+              </button>
             </div>
-
-            {/* Tags */}
-            <div className="modal-section-label">Labels</div>
-            <div className="d-flex flex-wrap gap-1 mb-3">
-              {TAGS_OPTIONS.map(t => (
-                <Badge
-                  key={t}
-                  bg="none"
-                  className={`card-tag tag-${t}`}
-                  style={{ cursor:'pointer', opacity: form.tags.includes(t) ? 1 : 0.4, userSelect:'none', fontSize:12 }}
-                  onClick={() => toggleTag(t)}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </Badge>
-              ))}
-            </div>
-
-            {/* Due date */}
-            <div className="modal-section-label">Due Date</div>
-            <Form.Control
-              type="date"
-              value={form.due}
-              onChange={e => set('due', e.target.value)}
-              size="sm"
-              className="mb-3"
-            />
-
-            {/* Assignees */}
-            <div className="modal-section-label">Members</div>
-            <Form.Control
-              value={form.assignees}
-              onChange={e => set('assignees', e.target.value)}
-              placeholder="Alice, Bob, Carol"
-              size="sm"
-              className="mb-3"
-            />
-            <Form.Text className="text-muted">Comma-separated names</Form.Text>
-
-            {/* Move to column */}
-            <div className="modal-section-label mt-3">Move to</div>
-            <Form.Select
-              size="sm"
-              value={colId}
-              onChange={e => onMove(card._id, colId, e.target.value)}
-            >
-              {colOptions.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </Form.Select>
-
           </Col>
         </Row>
       </Modal.Body>
 
-      <Modal.Footer>
-        <Button
-          variant="outline-danger"
-          size="sm"
-          onClick={() => { onDelete(colId, card._id); onClose(); }}
-        >
-          <i className="bi bi-trash me-1" />Delete card
-        </Button>
-        <div className="ms-auto d-flex gap-2">
-          <Button variant="outline-secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button
-            size="sm"
-            style={{ background: '#0079bf', borderColor: '#0079bf' }}
-            onClick={() => { handleSave(); onClose(); }}
-          >
-            Save changes
-          </Button>
-        </div>
+      <Modal.Footer className="mb-modal-footer">
+        <button className="mb-btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="mb-btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
       </Modal.Footer>
     </Modal>
   );
